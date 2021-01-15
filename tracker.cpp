@@ -109,6 +109,7 @@ void Tracker::ShowControlsGUI()
     cv::createTrackbar("Vmax", "Trackbars", &m_vMax, 256, 0);
     cv::createTrackbar("Smin", "Trackbars", &m_sMin, 256, 0);
     // 鼠标选择 回调函数,鼠标选择之后调用onMouse函数
+    // ----在这里处理实例分割要追踪的目标
     cv::setMouseCallback("CamShift", Tracker::OnMouse, 0);
   }
   m_showControlsGUI = true;
@@ -161,6 +162,7 @@ void Tracker::OnMouse(int event, int x, int y, int /*flags*/, void *param)
     break;
   }
 }
+
 void Tracker::InitTrackWindow(const cv::Mat &img, const cv::Rect &selRect)
 {
   // if (g_initTracking < 0) {
