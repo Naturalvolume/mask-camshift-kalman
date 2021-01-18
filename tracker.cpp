@@ -40,6 +40,7 @@ Tracker::InitParams::InitParams()
 void Tracker::Init(const cv::Size &frameSize,
                    const InitParams &initParams)
 {
+  cout << "run" << endl;
   // Get frame size
   m_frameSize = frameSize;
 
@@ -70,7 +71,7 @@ void Tracker::Init(const cv::Size &frameSize,
   m_kalmanv.clear();
 
   m_histImg = Mat::zeros(200, 320, CV_8UC3);
-
+  
   // Show controlsGUI, m_imgBackproject, histogram
   m_showControlsGUI = false;
   // 显示控制面板,选择追踪物体,调用鼠标选择后的回调函数
@@ -79,17 +80,8 @@ void Tracker::Init(const cv::Size &frameSize,
   m_initialized = true;
 
   // Static variables
-  // g_selectObject = false;
-  g_initTracking = false;
-  // g_selId = -1;
-  // g_selRect;
-  // g_selOrigin;
-  // bool Tracker::g_selectObject = false;
-  // int Tracker::g_initTracking = 0;
-  // int Tracker::g_selId = -1;
-  // cv::Rect Tracker::g_selRect;
-  // cv::Point Tracker::g_selOrigin;
-
+  g_selectObject = true;
+  g_initTracking = -1;
 
 }
 
@@ -109,7 +101,7 @@ void Tracker::ShowControlsGUI()
     cv::createTrackbar("Vmax", "Trackbars", &m_vMax, 256, 0);
     cv::createTrackbar("Smin", "Trackbars", &m_sMin, 256, 0);
     // 鼠标选择 回调函数,鼠标选择之后调用onMouse函数
-    cv::setMouseCallback("CamShift", Tracker::OnMouse, 0);
+    // cv::setMouseCallback("CamShift", Tracker::OnMouse, 0);
   }
   m_showControlsGUI = true;
 
@@ -124,43 +116,43 @@ Tracker::~Tracker()
 }
 // ???? 这里为啥int后面可以是一个被注释掉的变量
 // 保存选择目标的矩形区域,改变目前的跟踪状态
-void Tracker::OnMouse(int event, int x, int y, int /*flags*/, void *param)
-{
-  // 鼠标的监听事件包括按下 抬起
-  // 所以会触发两次
-  // 第一次触发确定起始点(), 第二次触发g_selectObject为TRUE,根据大小 宽高确定目标物体矩形
+// void Tracker::OnMouse(int event, int x, int y, int /*flags*/, void *param)
+// {
+//   // 鼠标的监听事件包括按下 抬起
+//   // 所以会触发两次
+//   // 第一次触发确定起始点(), 第二次触发g_selectObject为TRUE,根据大小 宽高确定目标物体矩形
 
-  // 第二次:鼠标抬起时
-  // 根据当前点x和已选择起点x间的关系确定矩形的终点
-  if (g_selectObject) {
-    // g_selOrigin是已经选择的物体矩形区域
-    g_selRect.x = MIN(x, g_selOrigin.x);
-    g_selRect.y = MIN(y, g_selOrigin.y);
-    // 用绝对值确定矩形的宽高
-    g_selRect.width = std::abs(x - g_selOrigin.x);
-    g_selRect.height = std::abs(y - g_selOrigin.y);
+//   // 第二次:鼠标抬起时
+//   // 根据当前点x和已选择起点x间的关系确定矩形的终点
+//   if (g_selectObject) {
+//     // g_selOrigin是已经选择的物体矩形区域
+//     g_selRect.x = MIN(x, g_selOrigin.x);
+//     g_selRect.y = MIN(y, g_selOrigin.y);
+//     // 用绝对值确定矩形的宽高
+//     g_selRect.width = std::abs(x - g_selOrigin.x);
+//     g_selRect.height = std::abs(y - g_selOrigin.y);
 
-  }
+//   }
 
-  switch (event) {
-    // 第一次:监听到鼠标按下事件
-  case EVENT_LBUTTONDOWN:
-    // 矩形起点 
-    g_selOrigin = cv::Point(x, y);
-    g_selRect = cv::Rect(x, y, 0, 0);
-    // 设置选择物体标志为TRUE,可以在下一次触发事件中计算得到矩形位置和宽高
-    g_selectObject = true;
-    break;
-    // 第二次:鼠标抬起,物体选择结束
-  case EVENT_LBUTTONUP:
-    g_selectObject = false;
-    // 物体选择成功,改变g_initTracking标志位
-    // 表示此时已选择好物体,但还未开始跟踪
-    if (g_selRect.width > 0 && g_selRect.height > 0)
-      g_initTracking = -1;
-    break;
-  }
-}
+//   switch (event) {
+//     // 第一次:监听到鼠标按下事件
+//   case EVENT_LBUTTONDOWN:
+//     // 矩形起点 
+//     g_selOrigin = cv::Point(x, y);
+//     g_selRect = cv::Rect(x, y, 0, 0);
+//     // 设置选择物体标志为TRUE,可以在下一次触发事件中计算得到矩形位置和宽高
+//     g_selectObject = true;
+//     break;
+//     // 第二次:鼠标抬起,物体选择结束
+//   case EVENT_LBUTTONUP:
+//     g_selectObject = false;
+//     // 物体选择成功,改变g_initTracking标志位
+//     // 表示此时已选择好物体,但还未开始跟踪
+//     if (g_selRect.width > 0 && g_selRect.height > 0)
+//       g_initTracking = -1;
+//     break;
+//   }
+// }
 void Tracker::InitTrackWindow(const cv::Mat &img, const cv::Rect &selRect)
 {
   // if (g_initTracking < 0) {
@@ -224,31 +216,29 @@ void Tracker::ProcessFrame(const cv::Mat &img, cv::Mat &out)
 
   img.copyTo(out);
 
-
-
   // Draw selection box
   // 若已选择物体
   // ??? 在鼠标监听的时候,当物体选择完毕该标志位是会被置为false的
   // 所以这里啥时候会被调用呢
   // ??? 这里应该不会被调用
-  if (g_selectObject) {
-    // 且物体符合条件
-    if ((g_selRect.width > 0) && (g_selRect.height > 0)) {
-      // 截取目标物体为感兴趣区域
-      Mat roi(out, g_selRect);
-      // bitwise_not表示按位操作像素,对二进制数据进行非操作
-      // 对图像(灰度图或彩色图均可)每个像素值进行二进制非操作 ~1=0 ~0=1
-      // 即对感兴趣区域的目标图像全部按位取反,即黑的变成白的,白的变成黑的
-      // ????? 但是这里
-      bitwise_not(roi, roi);
-      // 在所有图像基本运算的操作函数中,凡是带有掩码的处理函数,其掩码都参与运算(输入图像运算完之后再与掩码图像或矩阵计算)
-    }
-  }
+  // if (g_selectObject) {
+  //   // 且物体符合条件
+  //   if ((g_selRect.width > 0) && (g_selRect.height > 0)) {
+  //     // 截取目标物体为感兴趣区域
+  //     Mat roi(out, g_selRect);
+  //     // bitwise_not表示按位操作像素,对二进制数据进行非操作
+  //     // 对图像(灰度图或彩色图均可)每个像素值进行二进制非操作 ~1=0 ~0=1
+  //     // 即对感兴趣区域的目标图像全部按位取反,即黑的变成白的,白的变成黑的
+  //     // ????? 但是这里
+  //     bitwise_not(roi, roi);
+  //     // 在所有图像基本运算的操作函数中,凡是带有掩码的处理函数,其掩码都参与运算(输入图像运算完之后再与掩码图像或矩阵计算)
+  //   }
+  // }
 
 
 
   int ch[] = {0, 0};
-  // m_imgHSV是视频的HSV格式图像
+  // m_imgHSV是视频的HSV格式图像                                                
   cv::cvtColor(img, m_imgHSV, COLOR_BGR2HSV);
   // 二值化HSV,把没看组条件的置255,不满足的置0
   // 输出图像掩码m_imgMask

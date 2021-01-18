@@ -18,6 +18,8 @@
 #include "tracker.hpp"
 #include "functions.hpp"
 #include "registration.hpp"
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/split.hpp>
 using namespace cv;
 using namespace std;
 using namespace cv::xfeatures2d;
@@ -36,39 +38,158 @@ Point Tracker::g_selOrigin;
 extern string hot_keys;
 extern const char *keys;
 
+// 1.15
+void LoadImages(const string &strSequence, vector<string> &vstrImageFilenames, const string &strSemantic, vector<string> &vstrSemanticFile,
+        vector<string> &vstrLoaction, const string &count);
+void LoadMask(const string &strFilenamesMask, cv::Mat &imMask);
+
 int main(int argc, const char **argv)
 {
 
-    VideoCapture cap;
     Tracker objTracker;
     // opencv中定义的命令行解析函数
     CommandLineParser parser(argc, argv, keys);
-    if (parser.has("help")) {
+    if (parser.has("help") || argc != 4) {
         help();
         return 0;
     }
-
-    cap.open(argv[1]);
-    if (!cap.isOpened()) {
-        help();
-        cout << "***Could not access file...***\n";
-        return -1;
-    }
-    // 获得视频的宽高
-    Size S = Size((int) cap.get(CV_CAP_PROP_FRAME_WIDTH),    //Acquire input size
-                  (int) cap.get(CV_CAP_PROP_FRAME_HEIGHT));
     // 输出定义好的热键   
     cout << hot_keys;
     bool paused = false;
-    // 从视频中截取图像帧
-    Mat frame;
-    // 提取第一帧作为后来截取的对象
-    cap >> frame;
+
+    vector<string> vstrImageFilenames;
+    vector<string> vstrSemanticFile;
+    vector<string> vstrLocation;
+    LoadImages(string(argv[1]), vstrImageFilenames, string(argv[2]), vstrSemanticFile, vstrLocation, string(argv[3]));
+
+    int nImages = vstrImageFilenames.size();
+    // 验证图片和语义数量是否正确
+    if(vstrImageFilenames.empty())
+    {
+        cerr << endl << "error1: No images found in provided path." << endl;
+        return 1;
+    }
+    else if(vstrSemanticFile.empty())
+    {
+        cerr << endl << "error2: No semanticFile found in provided path." << endl;
+        return 1;
+    }
+    else if(vstrImageFilenames.size() != vstrSemanticFile.size() || vstrLocation.size() != nImages)
+    {
+        cerr << endl << "error3: Different number of images for segmentation." << endl;
+        return 1;
+    }
+
+    // TODO 输出
+    // VideoWriter outputVideo;
+    // outputVideo.open("output.mp4" , 0x00000021, cap.get(CV_CAP_PROP_FPS), S, true);
+
+    Mat frame, out;
+    for(int ni=0; ni<nImages; ni++) {
+        // read image
+        frame = imread(vstrImageFilenames[ni], CV_LOAD_IMAGE_UNCHANGED);
+        // cout << "clos:" << frame.cols << endl;
+	    // cout << "rows" << frame.rows << endl;
+        cv::namedWindow("CamShift", cv::WINDOW_AUTOSIZE);
+        if(frame.empty()) {
+            cerr << endl << "Failed to load image at: " << vstrImageFilenames[ni] << endl;
+            return 1;
+        }
+
+        // imshow("CamShift", frame);
+        // waitKey(1000);
+        // LoadMask(vstrSemanticFile[ni], frame);
+        // imshow("CamShift", frame);
+        // waitKey(1000);
+        ifstream file_location;
+        file_location.open(vstrLocation[ni].c_str());
+        while(!file_location) {
+            cout << "the file is not open" << endl;
+        }
+        int x1, y1, x2, y2;
+        while(!file_location.eof()) {
+            string s;
+            getline(file_location, s);
+            if(!s.empty()) {
+                vector<string> vStr;
+                boost::split(vStr, s, boost::is_any_of(" "), boost::token_compress_on);
+                x1 = atoi(vStr[2].c_str());
+                y1 = atoi(vStr[3].c_str());
+                x2 = atoi(vStr[4].c_str());
+                y2 = atoi(vStr[5].c_str());
+            }
+            
+            // TODO 这是只能处理一个跟踪物体的
+
+        }
+
+        Tracker::g_selRect = cv::Rect(x1, y1, x2, y2);
+        // ----这是显示跟踪物体矩形,仅供调试用
+        // rectangle(frame, g_selRect, Scalar(255, 0, 255), 5, 1, 0);
+        // cv::namedWindow("roi", cv::WINDOW_AUTOSIZE);
+        // imshow("roi", frame);
+        // waitKey(2000);
+        // 没有暂停跟踪且未初始化目标
+        if (!paused && !Tracker::g_initTracking) {
+            cv::Size S = cv::Size(frame.rows, frame.cols);
+            objTracker.Init(S, Tracker::InitParams());
+        }
+        if (!paused) {
+            // 处理每一帧
+            objTracker.ProcessFrame(frame, out);
+
+        }
+        imshow("CamShift", out);
+        
+            
+        // outputVideo << out;
+        char c = (char)waitKey(10);
+        if (c == 27)
+            break;
+        switch (c) {
+        case 'b':
+            // 展示反向投影图
+            // 更改标志位
+            objTracker.ToggleShowBackproject();
+            break;
+        case 'c':
+            // trackObject = 0;
+            // histimg = Scalar::all(0);
+            break;
+        case 'h':
+            // 隐藏控制面板
+            objTracker.HideControlsGUI();
+            // ----showHist未定义
+            // showHist = !showHist;    
+            // if (!showHist)
+            //     destroyWindow("Histogram");
+            // else
+            //     namedWindow("Histogram", 1);
+            // break;
+        // 暂停/重启跟踪 
+        case 'p':
+            paused = !paused;
+            break;
+        // 可以重新定义要追踪的物体
+        case 'r':
+            // 让视频帧从第一帧开始 
+            // cap.set(CV_CAP_PROP_POS_AVI_RATIO, 0);
+            // outputVideo.set(CV_CAP_PROP_POS_AVI_RATIO, 0);
+            // cap >> frame;
+            // objTracker.Init(S, Tracker::InitParams());
+            break;
+        default:
+            ;
+        }
+    }
+
+  
     // 初始化跟踪器
     // 1. 定义卡尔曼滤波参数
     // 2. 显示控制界面
     // 3. 监听鼠标,调用选择目标回调函数
-    objTracker.Init(S, Tracker::InitParams());
+    
+    
 
     // static_cast用来把 cap.get(CV_CAP_PROP_FOURCC) 转换为int类型
     // 但没有运行时类型检查来保证转换的安全性
@@ -76,81 +197,69 @@ int main(int argc, const char **argv)
     // cap.get(CV_CAP_PROP_FOURCC) 获得视频的编码格式
     // int ex = static_cast<int>(cap.get(CV_CAP_PROP_FOURCC));
     // ?????? 把输出转换成视频会报错
-    VideoWriter outputVideo;
-    outputVideo.open("output.mp4" , 0x00000021, cap.get(CV_CAP_PROP_FPS), S, true);
+    
 
-    Mat out;
-    try {
+    // outputVideo.release();
+    return 0;
+}
 
-        while (1) {
-            // 若没有停止且已初始化
-            if (!paused && Tracker::g_initTracking) {
-                // 提取帧
-                cap >> frame;
-                if (frame.empty())
-                    break;
+void LoadImages(const string &strSequence, vector<string> &vstrImageFilenames, const string &strSemantic, vector<string> &vstrSemanticFile,
+        vector<string> &vstrLoaction, const string &count)
+{
+    // TODO 时间戳文件怎么弄
+    
+
+    // 输入的路径要到对应的图片文件夹
+    string strPrefixLeft = strSequence;
+    string strPrefixSemantic = strSemantic;
+
+    int c = atoi(count.c_str());
+    vstrImageFilenames.resize(c);
+    vstrSemanticFile.resize(c);
+    vstrLoaction.resize(c);
+
+    for(int i=0; i<c; i++)
+    {
+        stringstream ss;
+        ss << setfill('0') << setw(6) << i;
+        vstrImageFilenames[i] = strPrefixLeft + ss.str() + ".png";
+        // cout << vstrImageFilenames[i] << endl;
+        vstrSemanticFile[i] = strPrefixSemantic + ss.str() + ".txt";
+        // cout << vstrSemanticFile[i] << endl;
+        vstrLoaction[i] = strPrefixSemantic + ss.str() + "l.txt";
+        cout << vstrLoaction[i] << endl;
+    }
+}
+
+void LoadMask(const string &strFilenamesMask, cv::Mat &im)
+{
+    ifstream file_mask;
+    file_mask.open(strFilenamesMask.c_str());
+
+    // Main loop
+    // count代表图片的行数
+    int count = 0;
+    // ｉｍｇＬａｂｅｌ是为了展示
+    // cv::Mat imgLabel(im.rows,im.cols,CV_8UC3); // for display
+    while(!file_mask.eof())
+    {
+        string s;
+        getline(file_mask, s);
+        if(!s.empty())
+        {
+            stringstream ss;
+            ss << s;
+            int tmp;
+            // 根据掩码图片的矩阵列宽，遍历读取每个变量
+            for(int i = 0; i < im.cols; ++i){
+                ss >> tmp;
+                if (tmp!=0){
+                    im.at<uchar>(count,i) = 0;
+                   
+                }
             }
-            // 鼠标选取的过程也会显示出来
-            if (!paused) {
-                // 处理每一帧
-                objTracker.ProcessFrame(frame, out);
-
-            }
-            imshow("CamShift", out);
-            
-            outputVideo << out;
-
-            char c = (char)waitKey(10);
-            if (c == 27)
-                break;
-            switch (c) {
-            case 'b':
-                // 展示反向投影图
-                // 更改标志位
-                objTracker.ToggleShowBackproject();
-                break;
-            case 'c':
-                // trackObject = 0;
-                // histimg = Scalar::all(0);
-                break;
-            case 'h':
-                // 隐藏控制面板
-                objTracker.HideControlsGUI();
-                // ----showHist未定义
-                // showHist = !showHist;    
-                // if (!showHist)
-                //     destroyWindow("Histogram");
-                // else
-                //     namedWindow("Histogram", 1);
-                // break;
-            // 暂停/重启跟踪 
-            case 'p':
-                paused = !paused;
-                break;
-            // 可以重新定义要追踪的物体
-            case 'r':
-                // 让视频帧从第一帧开始 
-                cap.set(CV_CAP_PROP_POS_AVI_RATIO, 0);
-                outputVideo.set(CV_CAP_PROP_POS_AVI_RATIO, 0);
-                cap >> frame;
-                objTracker.Init(S, Tracker::InitParams());
-
-                break;
-            default:
-                ;
-            }
+            count++;
         }
     }
-
-    catch (const cv::Exception &e) {
-        std::cerr << e.what();
-        cap.release();
-        outputVideo.release();
-
-        return 1;
-    }
-    cap.release();
-    outputVideo.release();
-
-    return 0;
+    return;
 }
