@@ -8,3 +8,5 @@
 /.cache/
 /build/
 /.history/
+LICENSE
+.gitignore

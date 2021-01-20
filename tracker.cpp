@@ -11,7 +11,7 @@ using namespace std;
 #include <opencv2/features2d.hpp>
 
 // 画线
-// 
+// 画卡尔曼滤波预测的位置,两条线的交点
 #define drawCross( center, color, d )                                 \
 line( out, Point( center.x - d, center.y - d ), Point( center.x + d, center.y + d ), color, 2, CV_AA, 0); \
 line( out, Point( center.x + d, center.y - d ), Point( center.x - d, center.y + d ), color, 2, CV_AA, 0 )
