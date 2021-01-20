@@ -96,36 +96,31 @@ int main(int argc, const char **argv)
             return 1;
         }
 
-        // imshow("CamShift", frame);
-        // waitKey(1000);
-        // LoadMask(vstrSemanticFile[ni], frame);
-        // imshow("CamShift", frame);
-        // waitKey(1000);
         ifstream file_location;
         file_location.open(vstrLocation[ni].c_str());
         while(!file_location) {
             cout << "the file is not open" << endl;
         }
-        int x1, y1, x2, y2;
+        Point p1, p2;
         while(!file_location.eof()) {
             string s;
             getline(file_location, s);
             if(!s.empty()) {
                 vector<string> vStr;
                 boost::split(vStr, s, boost::is_any_of(" "), boost::token_compress_on);
-                x1 = atoi(vStr[2].c_str());
-                y1 = atoi(vStr[3].c_str());
-                x2 = atoi(vStr[4].c_str());
-                y2 = atoi(vStr[5].c_str());
+                p1.x = atoi(vStr[2].c_str());
+                p1.y = atoi(vStr[3].c_str());
+                p2.x = atoi(vStr[4].c_str());
+                p2.y = atoi(vStr[5].c_str());
             }
-            
             // TODO 这是只能处理一个跟踪物体的
 
         }
-
-        Tracker::g_selRect = cv::Rect(x1, y1, x2, y2);
+        
+        Tracker::g_selRect = cv::Rect(p1, p2);
         // ----这是显示跟踪物体矩形,仅供调试用
-        // rectangle(frame, g_selRect, Scalar(255, 0, 255), 5, 1, 0);
+        rectangle(frame, Tracker::g_selRect, Scalar(0, 0, 255), 1, 1, 0);
+        
         // cv::namedWindow("roi", cv::WINDOW_AUTOSIZE);
         // imshow("roi", frame);
         // waitKey(2000);
@@ -136,7 +131,9 @@ int main(int argc, const char **argv)
         }
         if (!paused) {
             // 处理每一帧
+            cout << "processing:" << ni << endl;
             objTracker.ProcessFrame(frame, out);
+            waitKey(2000);
 
         }
         imshow("CamShift", out);

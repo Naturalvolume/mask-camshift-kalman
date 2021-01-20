@@ -91,8 +91,8 @@ void Tracker::ShowControlsGUI()
   cv::namedWindow("CamShift", 0);
   // ???? 这里虽然有直方图窗口但是并没有显示直方图,而是黑色图片
   // 这两个窗口并没有使用
-  cv::namedWindow("hsv", 0);
-  cv::namedWindow("hue", 0);
+  // cv::namedWindow("hsv", 0);
+  // cv::namedWindow("hue", 0);
   cv::namedWindow("Histogram", 0);
   cv::namedWindow("Trackbars", 0);
   if (!m_showControlsGUI) {
@@ -159,6 +159,8 @@ void Tracker::InitTrackWindow(const cv::Mat &img, const cv::Rect &selRect)
   // roi是原图的h分量
   // maskroi是二值化之后的图像掩码
   cv::Mat roi(m_imgHue, g_selRect), maskroi(m_imgMask, g_selRect);
+  // imshow("hsv", roi);
+  // imshow("hue", maskroi);
 
   // Create histograms
   // 直方图范围
@@ -215,7 +217,6 @@ void Tracker::ProcessFrame(const cv::Mat &img, cv::Mat &out)
 {
 
   img.copyTo(out);
-
   // Draw selection box
   // 若已选择物体
   // ??? 在鼠标监听的时候,当物体选择完毕该标志位是会被置为false的
@@ -234,8 +235,6 @@ void Tracker::ProcessFrame(const cv::Mat &img, cv::Mat &out)
   //     // 在所有图像基本运算的操作函数中,凡是带有掩码的处理函数,其掩码都参与运算(输入图像运算完之后再与掩码图像或矩阵计算)
   //   }
   // }
-
-
 
   int ch[] = {0, 0};
   // m_imgHSV是视频的HSV格式图像                                                
@@ -261,8 +260,8 @@ void Tracker::ProcessFrame(const cv::Mat &img, cv::Mat &out)
   // ch: 序号对向量, 决定哪个通道被拷贝；偶数下标用来标识输入矩阵, 奇数下标用来标识输出矩阵；若偶数下标为负数,则对应的输出矩阵为零矩阵
   // 所以,这个函数实现从hsv图像中仅拷贝h通道数据
   cv::mixChannels(&m_imgHSV, 1, &m_imgHue, 1, ch, 1);
-  imshow("hsv", Tracker::m_imgHSV);
-  imshow("hue", Tracker::m_imgHue);
+  // imshow("hsv", Tracker::m_imgHSV);
+  // imshow("hue", Tracker::m_imgHue);
 
   // Check if time to init
   // 若已选择好物体,初始化跟踪框,提取目标直方图
@@ -355,8 +354,8 @@ void Tracker::DrawStuff(cv::Mat &out)
   // 输出卡尔曼滤波预测的运动方向 位置
   // 但为什么最后画的线只有第一帧有呢
   // 这里其实是以线成点吗???
-  for (int i = 0; i < m_kalmanv.size() - 1; i++)
-    line(out, m_kalmanv[i], m_kalmanv[i + 1], Scalar(0, 0, 255), 3);
+  // for (int i = 0; i < m_kalmanv.size() - 1; i++)
+  //   line(out, m_kalmanv[i], m_kalmanv[i + 1], Scalar(0, 0, 255), 3);
 
   // 最后画的点还是卡尔曼滤波预测的,目标框的中心点
   Point statePt(m_estimated.at<float>(0), m_estimated.at<float>(1));
