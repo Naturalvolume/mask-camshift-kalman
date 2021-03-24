@@ -15,142 +15,97 @@
 #include <iostream>
 #include <ctype.h>
 
-#include "tracker.hpp"
-#include "functions.hpp"
-#include "registration.hpp"
+// #include "tracker.hpp"
+// #include "functions.hpp"
+// #include "registration.hpp"
 using namespace cv;
 using namespace std;
-using namespace cv::xfeatures2d;
-// using namespace tracker;
+// using namespace cv::xfeatures2d;
 
-// Static variables
-bool Tracker::g_selectObject = false;
-int Tracker::g_initTracking = 0;
-int Tracker::g_selId = -1;
-Rect Tracker::g_selRect;
-Point Tracker::g_selOrigin;
-
-// 1. 一个c文件需要调用另一个C文件中的变量或函数,而不能从H文件中调用变量
-// 2. 若不想让其他C文件引用本文件中的变量, 加上static即可
-// 所以表示下面的这两个变量是定义在其他C文件中的
-extern string hot_keys;
-extern const char *keys;
 
 int main(int argc, const char **argv)
 {
-
-    VideoCapture cap;
-    Tracker objTracker;
-    // opencv中定义的命令行解析函数
-    CommandLineParser parser(argc, argv, keys);
-    if (parser.has("help")) {
-        help();
-        return 0;
-    }
-
-    cap.open(argv[1]);
-    if (!cap.isOpened()) {
-        help();
-        cout << "***Could not access file...***\n";
+    Mat in_image, search_image, hsv_image, mask, hue, hist, histimg, backproj;
+    // Usage： <cmd> <file_in> <file_out>
+    //读取原始图像
+    in_image = imread(argv[1], IMREAD_UNCHANGED);
+    if (in_image.empty()) {
+        //检查是否读取图像
+        cout << "Error! Input image cannot be read...\n";
         return -1;
     }
-    // 获得视频的宽高
-    Size S = Size((int) cap.get(CV_CAP_PROP_FRAME_WIDTH),    //Acquire input size
-                  (int) cap.get(CV_CAP_PROP_FRAME_HEIGHT));
-    // 输出定义好的热键   
-    cout << hot_keys;
-    bool paused = false;
-    // 从视频中截取图像帧
-    Mat frame;
-    // 提取第一帧作为后来截取的对象
-    cap >> frame;
-    // 初始化跟踪器
-    // 1. 定义卡尔曼滤波参数
-    // 2. 显示控制界面
-    // 3. 监听鼠标,调用选择目标回调函数
-    objTracker.Init(S, Tracker::InitParams());
+    //创建两个具有图像名称的窗口
+    // namedWindow("原图", WINDOW_AUTOSIZE);
+    // namedWindow("1_hsv", WINDOW_AUTOSIZE);
+    // namedWindow("2_mask", WINDOW_AUTOSIZE);
+    // namedWindow("3_hue", WINDOW_AUTOSIZE);
+    cvtColor(in_image, hsv_image, COLOR_BGR2HSV);
+    int _vmin = 32, _vmax = 256;
+    // inRange()函数的功能是检查输入数组的每个元素是不是在给定范围内。
+    // 检查的是hsv的像素的Hue分量是否在0-180之间，Saturation分量是否在smin-256之间，Value分量是否在MIN(_vmin, _vmax)和MAX(_vmin, _vmax)之间
+    // 返回验证矩阵mask，如果hsv的像素点满足条件，那么mask矩阵中对应位置的点置255，不满足条件的置0。
+    // 这边的HSV范围是opencv中规定的，因此Hue的范围是0-180，Saturation和Value的范围是0-255。
 
-    // static_cast用来把 cap.get(CV_CAP_PROP_FOURCC) 转换为int类型
-    // 但没有运行时类型检查来保证转换的安全性
-    // static_cast可以用来隐式实现任何类型转换
-    // cap.get(CV_CAP_PROP_FOURCC) 获得视频的编码格式
-    // int ex = static_cast<int>(cap.get(CV_CAP_PROP_FOURCC));
-    // ?????? 把输出转换成视频会报错
-    VideoWriter outputVideo;
-    outputVideo.open("output.mp4" , 0x00000021, cap.get(CV_CAP_PROP_FPS), S, true);
+    inRange(hsv_image, Scalar(0, 50, MIN(_vmin, _vmax)),
+        Scalar(180, 256, MAX(_vmin, _vmax)), mask);//确保在范围内
+        int ch[] = { 0, 0 };
+    hue.create(hsv_image.size(), hsv_image.depth());
+    mixChannels(&hsv_image, 1, &hue, 1, ch, 1);//将hsv中的h通道放到hue中去，“提取” h（色调）分量
+    // 通道复制函数mixChannels()，此函数由输入参数复制某通道到输出参数特定的通道中
+    // 482, 87, 891, 300
+    cv::Rect selection = cv::Rect(482, 87, 409, 231);
+    rectangle(in_image, selection, Scalar(0, 0, 255), 1, 1, 0);
+    Mat roi(hue, selection), maskroi(mask, selection), origin_roi(in_image, selection);
 
-    Mat out;
-    try {
+    float histRanges[2];
+    histRanges[0] = 0;
+    histRanges[1] = 180.0f;
+    const float *phranges = histRanges;
+    int hSize = 16;
+    // 利用calcHist()函数计算了直方图之后再归一化到0-255
+    calcHist(&roi, 1, 0, maskroi, hist, 1, &hSize, &phranges);
+    normalize(hist, hist, 0, 255, NORM_MINMAX); 
 
-        while (1) {
-            // 若没有停止且已初始化
-            if (!paused && Tracker::g_initTracking) {
-                // 提取帧
-                cap >> frame;
-                if (frame.empty())
-                    break;
-            }
-            // 鼠标选取的过程也会显示出来
-            if (!paused) {
-                // 处理每一帧
-                objTracker.ProcessFrame(frame, out);
+    histimg = Mat::zeros(200, 320, CV_8UC3);
+    histimg = Scalar::all(0);
+    int binW = histimg.cols / hSize;//一个bin占的宽度
+    Mat buf(1, hSize, CV_8UC3);//定义一个缓冲单bin矩阵，1行16列
+    for (int i = 0; i < hSize; i++)
+        buf.at<Vec3b>(i) = Vec3b(saturate_cast<uchar>(i*180. / hSize), 255, 255);
+    cvtColor(buf, buf, COLOR_HSV2BGR);
 
-            }
-            imshow("CamShift", out);
-            
-            outputVideo << out;
-
-            char c = (char)waitKey(10);
-            if (c == 27)
-                break;
-            switch (c) {
-            case 'b':
-                // 展示反向投影图
-                // 更改标志位
-                objTracker.ToggleShowBackproject();
-                break;
-            case 'c':
-                // trackObject = 0;
-                // histimg = Scalar::all(0);
-                break;
-            case 'h':
-                // 隐藏控制面板
-                objTracker.HideControlsGUI();
-                // ----showHist未定义
-                // showHist = !showHist;    
-                // if (!showHist)
-                //     destroyWindow("Histogram");
-                // else
-                //     namedWindow("Histogram", 1);
-                // break;
-            // 暂停/重启跟踪 
-            case 'p':
-                paused = !paused;
-                break;
-            // 可以重新定义要追踪的物体
-            case 'r':
-                // 让视频帧从第一帧开始 
-                cap.set(CV_CAP_PROP_POS_AVI_RATIO, 0);
-                outputVideo.set(CV_CAP_PROP_POS_AVI_RATIO, 0);
-                cap >> frame;
-                objTracker.Init(S, Tracker::InitParams());
-
-                break;
-            default:
-                ;
-            }
-        }
+    for (int i = 0; i < hSize; i++)
+    {
+        int val = saturate_cast<int>(hist.at<float>(i)*histimg.rows / 255);//获取直方图相对高度
+        rectangle(histimg, Point(i*binW, histimg.rows),
+        Point((i + 1)*binW, histimg.rows - val),//画出直方图，左上角坐标，右下角坐标，高度，颜色，大小，线型
+        Scalar(buf.at<Vec3b>(i)), -1, 8);
     }
+    // 原图的反向投影
+    // calcBackProject(&hue, 1, 0, hist, backproj, &phranges);
 
-    catch (const cv::Exception &e) {
-        std::cerr << e.what();
-        cap.release();
-        outputVideo.release();
+    // 读入第二帧
+    search_image = imread(argv[2], IMREAD_UNCHANGED);
+    cvtColor(search_image, hsv_image, COLOR_BGR2HSV);
+    inRange(hsv_image, Scalar(0, 50, MIN(_vmin, _vmax)),
+        Scalar(180, 256, MAX(_vmin, _vmax)), mask);//确保在范围内
+    hue.create(hsv_image.size(), hsv_image.depth());
+    mixChannels(&hsv_image, 1, &hue, 1, ch, 1);
+    calcBackProject(&hue, 1, 0, hist, backproj, &phranges);
 
-        return 1;
-    }
-    cap.release();
-    outputVideo.release();
 
+    //在之前创建的窗口中显示图片
+    // imshow("原图", in_image);
+    // waitKey(); // Wait for key press
+    //写入图像
+    cout << "ready" << endl;
+    // imwrite("/home/kathy/happy/dataset/red_car/camshift/8_hsv.png", hsv_image);
+    // imwrite("/home/kathy/happy/dataset/red_car/camshift/9_mask.png", mask);
+    // imwrite("/home/kathy/happy/dataset/red_car/camshift/10_hue.png", hue);
+    // imwrite("/home/kathy/happy/dataset/red_car/camshift/4_roi.png", in_image);
+    // imwrite("/home/kathy/happy/dataset/red_car/camshift/5_roi.png", origin_roi);
+    // imwrite("/home/kathy/happy/dataset/red_car/camshift/6_hist.png", histimg);
+    imwrite("/home/kathy/happy/dataset/red_car/camshift/12_backproj.png", backproj);
     return 0;
+
 }
