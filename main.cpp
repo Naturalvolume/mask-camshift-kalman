@@ -21,19 +21,63 @@
 using namespace cv;
 using namespace std;
 // using namespace cv::xfeatures2d;
-
+void LoadImages(const string &strSequence, vector<string> &vstrImageFilenames, const string &strSemantic, vector<string> &vstrSemanticFile,
+        vector<string> &vstrLoaction, const string &count);
+void LoadMask(const string &strFilenamesMask, cv::Mat &imMask);
 
 int main(int argc, const char **argv)
 {
     Mat in_image, search_image, hsv_image, mask, hue, hist, histimg, backproj;
     // Usage： <cmd> <file_in> <file_out>
     //读取原始图像
-    in_image = imread(argv[1], IMREAD_UNCHANGED);
+    in_image = imread("/home/kathy/happy/dataset/red_car/image_0/000000.png", IMREAD_UNCHANGED);
     if (in_image.empty()) {
         //检查是否读取图像
         cout << "Error! Input image cannot be read...\n";
         return -1;
     }
+
+    // // string vstrImageFilenames= argv[1];
+    // //     cout << vstrImageFilenames << endl;
+    // string vstrSemanticFile = "/home/kathy/happy/dataset/red_car/image_1/000001.txt";
+    //     cout << vstrSemanticFile << endl;
+    // string vstrLoaction = "/home/kathy/happy/dataset/red_car/image_1/000001l.txt";
+    //     cout << vstrLoaction << endl;
+    // ifstream file_mask;
+    // file_mask.open(vstrSemanticFile.c_str());
+    
+    // // ｉｍｇＬａｂｅｌ是为了展示
+    // cv::Mat imgLabel(in_image.rows,in_image.cols,CV_8UC3); // for display
+    //  namedWindow("mask", WINDOW_AUTOSIZE);
+    //  imshow("mask", imgLabel);
+    //  waitKey(2000);
+    // while(!file_mask.eof())
+    // {
+    //     // cout << "ready" << endl;
+    //     string s;
+    //     getline(file_mask, s);
+    //     cout << s.length() << endl; 
+    //     if(!s.empty())
+    //     {
+            
+    //         stringstream ss;
+    //         ss << s;
+    //         int tmp;
+    //         // 根据掩码图片的矩阵列宽，遍历读取每个变量
+    //         int count = 0;
+    //         for(int i = 0; i < in_image.rows; ++i){
+    //             ss >> tmp;
+    //             if (tmp==0){
+    //                 // count++;
+    //                 in_image.at<uchar>(count,i) = 1;
+    //             }
+    //         }
+    //         // cout << count << endl;
+    //     }
+    // }
+    // namedWindow("ma", WINDOW_AUTOSIZE);
+    //  imshow("ma", in_image);
+    //   waitKey(2000);
     //创建两个具有图像名称的窗口
     // namedWindow("原图", WINDOW_AUTOSIZE);
     // namedWindow("1_hsv", WINDOW_AUTOSIZE);
@@ -56,6 +100,7 @@ int main(int argc, const char **argv)
     cv::Rect selection = cv::Rect(482, 87, 409, 231);
     rectangle(in_image, selection, Scalar(0, 0, 255), 1, 1, 0);
     Mat roi(hue, selection), maskroi(mask, selection), origin_roi(in_image, selection);
+    imwrite("12_roi.png", roi);
 
     float histRanges[2];
     histRanges[0] = 0;
@@ -105,7 +150,67 @@ int main(int argc, const char **argv)
     // imwrite("/home/kathy/happy/dataset/red_car/camshift/4_roi.png", in_image);
     // imwrite("/home/kathy/happy/dataset/red_car/camshift/5_roi.png", origin_roi);
     // imwrite("/home/kathy/happy/dataset/red_car/camshift/6_hist.png", histimg);
-    imwrite("/home/kathy/happy/dataset/red_car/camshift/12_backproj.png", backproj);
+    // imwrite("/home/kathy/happy/dataset/red_car/camshift/12_backproj.png", backproj);
     return 0;
 
+}
+void LoadImages(const string &strSequence, vector<string> &vstrImageFilenames, const string &strSemantic, vector<string> &vstrSemanticFile,
+        vector<string> &vstrLoaction, const string &count)
+{
+    // TODO 时间戳文件怎么弄
+    
+
+    // 输入的路径要到对应的图片文件夹
+    string strPrefixLeft = strSequence;
+    string strPrefixSemantic = strSemantic;
+
+    int c = atoi(count.c_str());
+    vstrImageFilenames.resize(c);
+    vstrSemanticFile.resize(c);
+    vstrLoaction.resize(c);
+
+    for(int i=0; i<c; i++)
+    {
+        stringstream ss;
+        ss << setfill('0') << setw(6) << i;
+        vstrImageFilenames[i] = strPrefixLeft + ss.str() + ".png";
+        // cout << vstrImageFilenames[i] << endl;
+        vstrSemanticFile[i] = strPrefixSemantic + ss.str() + ".txt";
+        // cout << vstrSemanticFile[i] << endl;
+        vstrLoaction[i] = strPrefixSemantic + ss.str() + "l.txt";
+        cout << vstrLoaction[i] << endl;
+    }
+}
+
+void LoadMask(const string &strFilenamesMask, cv::Mat &im)
+{
+    ifstream file_mask;
+    file_mask.open(strFilenamesMask.c_str());
+
+    // Main loop
+    // count代表图片的行数
+    int count = 0;
+    // ｉｍｇＬａｂｅｌ是为了展示
+    // cv::Mat imgLabel(im.rows,im.cols,CV_8UC3); // for display
+    while(!file_mask.eof())
+    {
+        string s;
+        getline(file_mask, s);
+        if(!s.empty())
+        {
+            stringstream ss;
+            ss << s;
+            int tmp;
+            // 根据掩码图片的矩阵列宽，遍历读取每个变量
+            for(int i = 0; i < im.cols; ++i){
+                ss >> tmp;
+                if (tmp!=0){
+                    im.at<uchar>(count,i) = 0;
+                   
+                }
+            }
+            count++;
+        }
+    }
+    return;
 }
